@@ -408,8 +408,6 @@ void PrimalHeuristic(All_Values& Values, All_Lists& Lists, Node& root_node) {
 		root_node.model_matrix.push_back(temp_col);
 	}
 
-	cout << endl;
-
 	// ----- 构建 Y 列列表 (第一阶段模式) -----
 	for (int col = 0; col < K_num; col++) {
 		vector<double> temp_col;
@@ -429,8 +427,6 @@ void PrimalHeuristic(All_Values& Values, All_Lists& Lists, Node& root_node) {
 
 		root_node.Y_cols_list.push_back(temp_col);
 	}
-
-	cout << endl;
 
 	// ----- 构建 X 列列表 (第二阶段模式) -----
 	for (int col = K_num; col < K_num + P_num; col++) {
@@ -472,5 +468,5 @@ void PrimalHeuristic(All_Values& Values, All_Lists& Lists, Node& root_node) {
 		Lists.all_strip_types_list.push_back(temp_stp);
 	}
 
-	cout << endl;
+	cout << "[启发式] 初始解生成完成 (Y=" << K_num << ", X=" << P_num << ")\n";
 }

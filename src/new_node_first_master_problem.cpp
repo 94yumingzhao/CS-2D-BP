@@ -110,7 +110,6 @@ bool SolveNewNodeFirstMasterProblem(
 			IloNum var_max = this_node.var_to_branch_final;
 			IloNumVar Var_Y(CplexCol, var_min, var_max, ILOFLOAT, Y_name.c_str());
 			Vars_MP.add(Var_Y);
-			printf("\n\t Y_var_%d is set as %f, to be branched", col + 1, var_min);
 		}
 		// ----- Case 2: 非当前分支变量 -----
 		else {
@@ -125,7 +124,6 @@ bool SolveNewNodeFirstMasterProblem(
 					IloNum var_max = parent_node.branched_int_list[index];
 					IloNumVar Var_Y(CplexCol, var_min, var_max, ILOFLOAT, Y_name.c_str());
 					Vars_MP.add(Var_Y);
-					printf("\n\t Y_var_%d is set as %f, branched", col + 1, var_min);
 
 					find_flag = 1;
 					break;
@@ -165,7 +163,6 @@ bool SolveNewNodeFirstMasterProblem(
 			IloNum var_max = this_node.var_to_branch_final;
 			IloNumVar Var_X(CplexCol, var_min, var_max, ILOFLOAT, X_name.c_str());
 			Vars_MP.add(Var_X);
-			printf("\n\t X_var_%d is set as %f, to be branched", col + 1, var_min);
 		}
 		// ----- Case 2: 非当前分支变量 -----
 		else {
@@ -180,8 +177,6 @@ bool SolveNewNodeFirstMasterProblem(
 					IloNum var_max = parent_node.branched_int_list[pos];
 					IloNumVar Var_X(CplexCol, var_min, var_max, ILOFLOAT, X_name.c_str());
 					Vars_MP.add(Var_X);
-
-					printf("\n\t x_var_%d is set as %f, branched", col + 1, var_min);
 
 					find_flag = 1;
 					break;
@@ -203,61 +198,43 @@ bool SolveNewNodeFirstMasterProblem(
 	// =========================================================================
 	// 求解主问题
 	// =========================================================================
-	printf("\n\n############# Node_%d MP-1 CPLEX SOLVING START #############\n\n", this_node.index);
+	cout << "[节点_" << this_node.index << "] 求解初始主问题...\n";
 	IloCplex MP_cplex(Env_MP);
 	MP_cplex.extract(Model_MP);
+	MP_cplex.setOut(Env_MP.getNullStream());
 	MP_cplex.exportModel("New Node First Master Problem.lp");
 	bool MP_flag = MP_cplex.solve();
-	printf("\n############# Node_%d MP-1 CPLEX SOLVING OVER ###############\n\n", this_node.index);
 
 	if (MP_flag == 0) {
 		// 不可行, 标记剪枝
 		this_node.node_pruned_flag = 1;
-		printf("\n\t Node_%d MP-1 is NOT FEASIBLE\n", this_node.index);
-		printf("\n\t Node_%d MP-1 has to be pruned\n", this_node.index);
+		cout << "[节点_" << this_node.index << "] 初始主问题不可行, 需剪枝\n";
 	}
 	else {
-		printf("\n\t Node_%d MP-1 is FEASIBLE\n", this_node.index);
-		printf("\n\t OBJ of Node_%d MP-1 is %f\n\n", this_node.index, MP_cplex.getValue(Obj_MP));
+		cout << "[节点_" << this_node.index << "] 初始主问题可行, 目标值 = "
+		     << fixed << setprecision(4) << MP_cplex.getValue(Obj_MP) << "\n";
+		cout.unsetf(ios::fixed);
 
-		// ----- 输出解信息 -----
-		int sum_vars = 0;
+		// ----- 统计解信息 -----
 		int Y_fsb_num = 0;
 		int X_fsb_num = 0;
 		double soln_val = -1;
 
-		printf("\n\t Y Solns (stock cutting patterns):\n\n");
 		for (int col = 0; col < K_num; col++) {
 			soln_val = MP_cplex.getValue(Vars_MP[col]);
-			if (soln_val > 0) {
-				Y_fsb_num++;
-				sum_vars++;
-				printf("\t var_Y_%d = %f\n", col + 1, soln_val);
-			}
+			if (soln_val > 0) Y_fsb_num++;
 		}
 
-		printf("\n\t X Solns (strip cutting patterns):\n\n");
 		for (int col = K_num; col < K_num + P_num; col++) {
 			soln_val = MP_cplex.getValue(Vars_MP[col]);
-			if (soln_val > 0) {
-				X_fsb_num++;
-				sum_vars++;
-				printf("\t var_X_%d = %f\n", col + 1 - K_num, soln_val);
-			}
+			if (soln_val > 0) X_fsb_num++;
 		}
 
-		// ----- 输出已分支变量 -----
-		printf("\n\t BRANCHED VARS: \n\n");
-		int branched_vars_num = this_node.branched_int_list.size();
-		for (int k = 0; k < branched_vars_num; k++) {
-			printf("\t var_X_%d = %f branched \n",
-				this_node.branched_idx_list[k] + 1, this_node.branched_int_list[k]);
-		}
+		cout << "[节点_" << this_node.index << "] 非零解: Y=" << Y_fsb_num << ", X=" << X_fsb_num << "\n";
 
 		// ----- 提取对偶价格 -----
 		this_node.dual_prices_list.clear();
 
-		printf("\n\t strip_type cons dual prices: \n\n");
 		double dual_val = -1;
 		for (int row = 0; row < J_num; row++) {
 			dual_val = MP_cplex.getDual(Cons_MP[row]);
@@ -265,28 +242,15 @@ bool SolveNewNodeFirstMasterProblem(
 				dual_val = 0;
 			}
 			this_node.dual_prices_list.push_back(dual_val);
-			printf("\t dual_r_%d = %f\n", row + 1, dual_val);
 		}
 
-		printf("\n\t item_type cons dual prices: \n\n");
 		for (int row = J_num; row < J_num + N_num; row++) {
 			dual_val = MP_cplex.getDual(Cons_MP[row]);
 			if (dual_val == -0) {
 				dual_val = 0;
 			}
 			this_node.dual_prices_list.push_back(dual_val);
-			printf("\t dual_r_%d = %f\n", row + 1, dual_val);
 		}
-
-		// ----- 输出统计信息 -----
-		printf("\n\t Node_%d MP-1:\n", this_node.index);
-		printf("\n\t Lower Bound = %f", MP_cplex.getValue(Obj_MP));
-		printf("\n\t Sum of all solns = %d", sum_vars);
-		printf("\n\t Number of all solns = %d", K_num + P_num);
-		printf("\n\t Number of all fsb-solns = %d", Y_fsb_num + X_fsb_num);
-		printf("\n\t Number of Y fsb-solns = %d", Y_fsb_num);
-		printf("\n\t Number of X fsb-solns = %d", X_fsb_num);
-		printf("\n\t Number of branched-vars = %d\n", branched_vars_num);
 	}
 
 	MP_cplex.end();

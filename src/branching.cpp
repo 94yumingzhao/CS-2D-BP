@@ -62,25 +62,28 @@ int FinishNode(All_Values& Values, All_Lists& Lists, Node& this_node) {
 			if (this_node.index == 1) {
 				// 根节点即为整数解
 				Values.optimal_LB = this_node.LB;
-				printf("\n\t Current Optimal Lower Bound = %f\n", Values.optimal_LB);
+				cout << "[分支] 当前最优下界 = " << fixed << setprecision(4) << Values.optimal_LB << "\n";
+				cout.unsetf(ios::fixed);
 			}
 			if (this_node.index > 1) {
 				// 非根节点
 				if (Values.optimal_LB == -1) {
 					// 首个整数解节点
 					Values.optimal_LB = this_node.LB;
-					printf("\n\t Current Optimal Lower Bound = %f\n", Values.optimal_LB);
+					cout << "[分支] 当前最优下界 = " << fixed << setprecision(4) << Values.optimal_LB << "\n";
+					cout.unsetf(ios::fixed);
 				}
 				else {
 					// 已有整数解, 比较并更新
 					if (this_node.LB < Values.optimal_LB) {
 						Values.optimal_LB = this_node.LB;
-						printf("\n\t Current Optimal Lower Bound = %f\n", Values.optimal_LB);
+						cout << "[分支] 当前最优下界 = " << fixed << setprecision(4) << Values.optimal_LB << "\n";
+						cout.unsetf(ios::fixed);
 					}
 					if (this_node.LB >= Values.optimal_LB) {
 						// 下界不优, 剪枝
 						this_node.node_pruned_flag = 1;
-						printf("\n\t Node_%d has to be pruned\n", this_node.index);
+						cout << "[分支] 节点_" << this_node.index << " 需剪枝\n";
 					}
 				}
 			}
@@ -121,7 +124,9 @@ int ChooseVarToBranch(All_Values& Values, All_Lists& Lists, Node& this_node) {
 			int soln_int_val = int(soln_val);
 			if (soln_int_val != soln_val) {
 				// 找到非整数变量
-				printf("\n\t Node_%d var_x_%d = %f is NOT an integer\n", this_node.index, col + 1, soln_val);
+				cout << "[分支] 节点_" << this_node.index << " 变量_" << col + 1
+				     << " = " << fixed << setprecision(4) << soln_val << " 非整数\n";
+				cout.unsetf(ios::fixed);
 
 				// 记录分支变量信息
 				this_node.var_to_branch_idx = col;

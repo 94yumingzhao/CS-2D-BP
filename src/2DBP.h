@@ -39,6 +39,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <ilcplex/ilocplex.h>
+#include "logger.h"
 
 using namespace std;
 

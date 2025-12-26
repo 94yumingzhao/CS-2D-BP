@@ -37,52 +37,24 @@ void OutputHeuristicResults(All_Values& Values, All_Lists& Lists) {
 	// =========================================================================
 	// 控制台输出
 	// =========================================================================
+	cout << "[结果] 切割方案输出 (母板数: " << stocks_num << ")\n";
+
 	for (int pos = 0; pos < stocks_num; pos++) {
-		int LL = Lists.occupied_stocks_list[0].length;  // 母板长度
-		int WW = Lists.occupied_stocks_list[0].width;   // 母板宽度
+		int LL = Lists.occupied_stocks_list[0].length;
+		int WW = Lists.occupied_stocks_list[0].width;
 
-		// ----- 输出母板边界 -----
-		printf("\n\tSTOCK_%d ====================\n\n", Lists.occupied_stocks_list[pos].stock_idx);
-		printf("\t0\t0\n");
-		printf("\t0\t%d\n", WW);
-		printf("\t%d\t%d\n", LL, WW);
-		printf("\t%d\t0\n", LL);
-
-		// ----- 输出条带信息 -----
-		printf("\n\tSTOCK_%d, Stripes:\n", Lists.occupied_stocks_list[pos].stock_idx);
+		// 统计条带和子件数量
+		int strip_count = 0;
+		int item_count = 0;
 		for (size_t i = 0; i < strips_num; i++) {
-			if (Lists.all_strips_list[i].stock_idx == pos) {
-				int X = Lists.all_strips_list[i].pos_x;
-				int Y = Lists.all_strips_list[i].pos_y;
-				int L = Lists.all_strips_list[i].length;
-				int W = Lists.all_strips_list[i].width;
-				int strip_type_idx = Lists.all_strips_list[i].strip_type_idx;
-
-				printf("\n\tStrip_type_%d\n", strip_type_idx);
-				printf("\t%d\t%d\n", X, Y);
-				printf("\t%d\t%d\n", X, Y + W);
-				printf("\t%d\t%d\n", X + L, Y + W);
-				printf("\t%d\t%d\n", X + L, Y);
-			}
+			if (Lists.all_strips_list[i].stock_idx == pos) strip_count++;
 		}
-
-		// ----- 输出子件信息 -----
-		printf("\n\tSTOCK_%d, Item:\n", Lists.occupied_stocks_list[pos].stock_idx);
 		for (size_t i = 0; i < items_num; i++) {
-			if (Lists.occupied_items_list[i].stock_idx == pos) {
-				int X = Lists.occupied_items_list[i].pos_x;
-				int Y = Lists.occupied_items_list[i].pos_y;
-				int L = Lists.occupied_items_list[i].length;
-				int W = Lists.occupied_items_list[i].width;
-				int item_type_index = Lists.occupied_items_list[i].item_type_idx;
-
-				printf("\n\tItem_type_%d\n", item_type_index);
-				printf("\t%d\t%d\n", X, Y);
-				printf("\t%d\t%d\n", X, Y + W);
-				printf("\t%d\t%d\n", X + L, Y + W);
-				printf("\t%d\t%d\n", X + L, Y);
-			}
+			if (Lists.occupied_items_list[i].stock_idx == pos) item_count++;
 		}
+
+		cout << "[结果] 母板_" << Lists.occupied_stocks_list[pos].stock_idx
+		     << " (" << LL << " x " << WW << "): 条带=" << strip_count << ", 子件=" << item_count << "\n";
 	}
 
 	// =========================================================================

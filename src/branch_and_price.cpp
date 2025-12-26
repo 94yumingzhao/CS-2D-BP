@@ -44,8 +44,9 @@ int BranchAndPriceTree(All_Values& Values, All_Lists& Lists) {
 
 			if (parent_branch_flag == 0) {
 				// 无可分支节点, 算法终止
-				printf("\n\t Branch and Bound SOLVING OVER!!\n");
-				printf("\n\t Final Optimal Lower Bound = %f\n\n\n", Values.optimal_LB);
+				cout << "[分支定价] 求解完成\n";
+				cout << "[分支定价] 最优下界 = " << fixed << setprecision(4) << Values.optimal_LB << "\n";
+				cout.unsetf(ios::fixed);
 				break;
 			}
 
@@ -88,8 +89,9 @@ int BranchAndPriceTree(All_Values& Values, All_Lists& Lists) {
 
 					if (Values.search_flag != 1) {
 						Values.fathom_flag = 2;
-						printf("\n\t parent branch val = %.4f < 1, \n\n\t Have to fathom Right Node_%d\n",
-							parent_branch_val, new_right_node.index);
+						cout << "[分支定价] 父节点分支值 = " << fixed << setprecision(4) << parent_branch_val
+						     << " <= 1, 剪枝右子节点_" << new_right_node.index << "\n";
+						cout.unsetf(ios::fixed);
 					}
 				}
 				if (parent_branch_val > 1) {
@@ -99,10 +101,12 @@ int BranchAndPriceTree(All_Values& Values, All_Lists& Lists) {
 
 						if (Values.search_flag != 1) {
 							Values.fathom_flag = 1;
-							printf("\n\t Left Node_%d LB %.4f < Right Node_%d LB %.4f\n",
-								new_left_node.index, new_left_node.LB,
-								new_right_node.index, new_right_node.LB);
-							printf("\n\t continue to fathom RIGHT Node_%d\n", new_right_node.index);
+							cout << "[分支定价] 左子节点_" << new_left_node.index
+							     << " LB=" << fixed << setprecision(4) << new_left_node.LB
+							     << " < 右子节点_" << new_right_node.index
+							     << " LB=" << new_right_node.LB << "\n";
+							cout << "[分支定价] 继续剪枝右子节点_" << new_right_node.index << "\n";
+							cout.unsetf(ios::fixed);
 						}
 					}
 					if (new_left_node.LB >= new_right_node.LB) {
@@ -110,10 +114,12 @@ int BranchAndPriceTree(All_Values& Values, All_Lists& Lists) {
 
 						if (Values.search_flag != 1) {
 							Values.fathom_flag = 2;
-							printf("\n\t Left Node_%d LB %.4f >= Right Node_%d LB %.4f\n",
-								new_left_node.index, new_left_node.LB,
-								new_right_node.index, new_right_node.LB);
-							printf("\n\t continue to fathom RIGHT Node_%d\n", new_right_node.index);
+							cout << "[分支定价] 左子节点_" << new_left_node.index
+							     << " LB=" << fixed << setprecision(4) << new_left_node.LB
+							     << " >= 右子节点_" << new_right_node.index
+							     << " LB=" << new_right_node.LB << "\n";
+							cout << "[分支定价] 继续剪枝右子节点_" << new_right_node.index << "\n";
+							cout.unsetf(ios::fixed);
 						}
 					}
 				}
@@ -126,13 +132,14 @@ int BranchAndPriceTree(All_Values& Values, All_Lists& Lists) {
 			Values.branch_status = 3;
 			Values.fathom_flag = -1;
 			Values.search_flag = 0;
-			printf("\n\t Solns of this Node are all INTEGERS! \n");
-			printf("\n\t Current Optimal Lower Bound = %f\n", Values.optimal_LB);
+			cout << "[分支定价] 当前节点解均为整数\n";
+			cout << "[分支定价] 当前最优下界 = " << fixed << setprecision(4) << Values.optimal_LB << "\n";
+			cout.unsetf(ios::fixed);
 		}
 
 		// 防止无限循环
 		if (Values.node_num > 30) {
-			printf("\n	//////////// PROCEDURE STOP 3 //////////////\n");
+			cout << "[警告] 达到最大节点数 30, 强制终止\n";
 			break;
 		}
 	}

@@ -45,12 +45,11 @@ int ChooseNodeToBranch(All_Values& Values, All_Lists& Lists, Node& parent_node) 
 				// 未分支且未剪枝
 				if (Lists.all_nodes_list[k].LB < Values.optimal_LB) {
 					pos = k;
-					cout << endl;
 				}
 				else {
 					// 下界不优, 剪枝
 					int temp_idx = Lists.all_nodes_list[k].index;
-					printf("\n\t Node_%d has to be pruned\n", temp_idx);
+					cout << "[节点选择] 节点_" << temp_idx << " 需剪枝\n";
 					Lists.all_nodes_list[k].node_pruned_flag = 1;
 				}
 			}
@@ -94,13 +93,13 @@ int ChooseNodeToBranch(All_Values& Values, All_Lists& Lists, Node& parent_node) 
 
 	if (pos == -1) {
 		parent_branch_flag = 0;
-		printf("\n\t No Node to branch! \n");
+		cout << "[节点选择] 无可分支节点\n";
 	}
 	else {
 		parent_branch_flag = 1;
 		parent_node = Lists.all_nodes_list[pos];
 		parent_node.LB = 1;
-		printf("\n\t The Node to branch is Node_%d\n", parent_node.index);
+		cout << "[节点选择] 待分支节点: 节点_" << parent_node.index << "\n";
 	}
 
 	return parent_branch_flag;
@@ -122,24 +121,14 @@ void GenerateNewNode(All_Values& Values, All_Lists& Lists, Node& new_node, Node&
 	new_node.index = all_nodes_num + 1;
 	new_node.LB = -1;
 
-	// 输出分支信息
-	if (Values.branch_status == 1) {
-		printf("\n\t Node_%d is the LEFT branch of Node_%d	\n", new_node.index, parent_node.index);
-	}
-	if (Values.branch_status == 2) {
-		printf("\n\t Node_%d is the RIGHT branch of Node_%d	\n", new_node.index, parent_node.index);
-	}
-
 	// 记录父节点信息
 	new_node.parent_index = parent_node.index;
 	new_node.parent_branching_flag = Values.branch_status;
 	new_node.parent_var_to_branch_val = parent_node.var_to_branch_soln;
 
-	printf("\n###########################################\n");
-	printf("###########################################\n");
-	printf("################## NEW NODE_%d ##################\n", new_node.index);
-	printf("###########################################\n");
-	printf("###########################################\n\n");
+	// 输出分支信息
+	string branch_type = (Values.branch_status == 1) ? "左" : "右";
+	cout << "[节点生成] 节点_" << new_node.index << " (父节点_" << parent_node.index << " 的" << branch_type << "子节点)\n";
 
 	// 初始化分支变量信息
 	new_node.var_to_branch_idx = -1;
@@ -228,6 +217,4 @@ void GenerateNewNode(All_Values& Values, All_Lists& Lists, Node& new_node, Node&
 	new_node.dual_prices_list.clear();
 	new_node.new_Y_col.clear();
 	new_node.new_X_cols_list.clear();
-
-	cout << endl;
 }

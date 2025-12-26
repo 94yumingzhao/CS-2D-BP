@@ -26,6 +26,7 @@ set(CONCERT_LIB_DIR "${CPLEX_ROOT}/concert/lib/x64_windows_msvc14/stat_mda")
 # =============================================================================
 set(SOURCES
     src/main.cpp
+    src/logger.cpp
     src/input.cpp
     src/primal_heuristic.cpp
     src/root_node_column_generation.cpp

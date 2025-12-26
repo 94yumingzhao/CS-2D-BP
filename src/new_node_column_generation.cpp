@@ -52,8 +52,6 @@ void NewNodeColumnGeneration(
 		this_node,
 		parent_node);
 
-	cout << endl;
-
 	if (MP_flag == 1) {
 		// 初始主问题可行, 进入列生成循环
 		while (1) {
@@ -103,6 +101,4 @@ void NewNodeColumnGeneration(
 	Model_MP.end();
 	Env_MP.removeAllProperties();
 	Env_MP.end();
-
-	cout << endl;
 }
