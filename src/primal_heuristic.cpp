@@ -1,9 +1,7 @@
 // =============================================================================
 // primal_heuristic.cpp - 原始启发式算法
 // =============================================================================
-//
 // 功能: 使用贪心启发式生成初始可行解和模型矩阵
-//
 // =============================================================================
 
 #include "2DBP.h"
@@ -11,17 +9,13 @@
 using namespace std;
 
 
-// =============================================================================
-// RunHeuristic - 原始启发式生成初始解
-// =============================================================================
+// 原始启发式生成初始解
 void RunHeuristic(ProblemParams& params, ProblemData& data, BPNode& root_node) {
 
     int num_item_types = params.num_item_types_;
     int num_strip_types = params.num_strip_types_;
 
-    // =========================================================================
     // 初始化
-    // =========================================================================
     params.is_finished_ = false;
     data.assigned_items_.clear();
 
@@ -30,15 +24,13 @@ void RunHeuristic(ProblemParams& params, ProblemData& data, BPNode& root_node) {
     int strip_id = 0;
     int strip_pattern = 0;
 
-    // =========================================================================
     // 主循环: 逐个母板进行切割
-    // =========================================================================
     while (params.is_finished_ == false) {
 
-        // ----- 从母板列表取出一块母板 -----
+        // 从母板列表取出一块母板
         data.stocks_.erase(data.stocks_.begin());
 
-        // ----- 初始化当前母板 -----
+        // 初始化当前母板
         Stock new_stock;
         new_stock.length_ = data.stocks_[0].length_;
         new_stock.width_ = data.stocks_[0].width_;
@@ -54,7 +46,7 @@ void RunHeuristic(ProblemParams& params, ProblemData& data, BPNode& root_node) {
             new_stock.strip_types_.push_back(strip_type);
         }
 
-        // ----- 记录母板剩余可用区域 -----
+        // 记录母板剩余可用区域
         Item remain_area;
         remain_area.length_ = new_stock.length_;
         remain_area.width_ = new_stock.width_;
@@ -64,20 +56,16 @@ void RunHeuristic(ProblemParams& params, ProblemData& data, BPNode& root_node) {
         remain_area.stock_id_ = new_stock.id_;
         remain_area.assign_flag_ = 0;
 
-        // =====================================================================
         // 内循环: 在当前母板上切割条带
-        // =====================================================================
         int num_items = data.items_.size();
 
         for (int j = 0; j < num_items; j++) {
-            // ----- 检查子件 j 是否可以放入剩余区域 -----
+            // 检查子件 j 是否可以放入剩余区域
             if (data.items_[j].length_ <= remain_area.length_
                 && data.items_[j].width_ <= remain_area.width_
                 && data.items_[j].assign_flag_ == 0) {
 
-                // =============================================================
                 // 创建条带的第一个子件
-                // =============================================================
                 Item head_item;
                 data.items_[j].assign_flag_ = 1;
 
@@ -95,9 +83,7 @@ void RunHeuristic(ProblemParams& params, ProblemData& data, BPNode& root_node) {
 
                 data.assigned_items_.push_back(head_item);
 
-                // =============================================================
                 // 初始化新条带
-                // =============================================================
                 Strip new_strip;
                 new_strip.id_ = strip_id;
                 new_strip.type_id_ = head_item.type_id_;
@@ -119,9 +105,7 @@ void RunHeuristic(ProblemParams& params, ProblemData& data, BPNode& root_node) {
                 int type_idx = head_item.type_id_ - 1;
                 new_strip.item_types_[type_idx].count_++;
 
-                // =============================================================
                 // 计算第一个子件右侧的剩余区域
-                // =============================================================
                 Item strip_remain;
                 strip_remain.length_ = remain_area.length_ - head_item.length_;
                 strip_remain.width_ = head_item.width_;
@@ -132,9 +116,7 @@ void RunHeuristic(ProblemParams& params, ProblemData& data, BPNode& root_node) {
                 strip_remain.type_id_ = -1;
                 strip_remain.assign_flag_ = 0;
 
-                // =============================================================
                 // 在条带内继续放置子件 (贪心填充)
-                // =============================================================
                 for (int m = 0; m < num_items; m++) {
                     if (data.items_[m].length_ <= strip_remain.length_
                         && data.items_[m].width_ <= strip_remain.width_
@@ -167,9 +149,7 @@ void RunHeuristic(ProblemParams& params, ProblemData& data, BPNode& root_node) {
                     }
                 }
 
-                // =============================================================
                 // 判断条带模式是否为新模式
-                // =============================================================
                 int match_count = 0;
                 int num_strips = data.strips_.size();
 
@@ -212,11 +192,11 @@ void RunHeuristic(ProblemParams& params, ProblemData& data, BPNode& root_node) {
                 int strip_idx = new_strip.type_id_ - 1;
                 new_stock.strip_types_[strip_idx].count_++;
 
-                // ----- 更新母板剩余区域 (向下移动) -----
+                // 更新母板剩余区域 (向下移动)
                 remain_area.width_ = remain_area.width_ - head_item.width_;
                 remain_area.y_ = remain_area.y_ + head_item.width_;
 
-                // ----- 检查是否所有子件已分配 -----
+                // 检查是否所有子件已分配
                 int num_assigned = 0;
                 int total_items = data.items_.size();
                 for (int k = 0; k < total_items; k++) {
@@ -228,9 +208,7 @@ void RunHeuristic(ProblemParams& params, ProblemData& data, BPNode& root_node) {
             }
         }
 
-        // =====================================================================
         // 计算母板的切割损耗
-        // =====================================================================
         int total_cut_dist = 0;
         int num_strips_in_stock = new_stock.strips_.size();
 
@@ -266,9 +244,7 @@ void RunHeuristic(ProblemParams& params, ProblemData& data, BPNode& root_node) {
         new_stock.cut_dist_ = total_cut_dist;
         new_stock.cut_loss_ = new_stock.cut_dist_ * params.unit_cut_cost_;
 
-        // =====================================================================
         // 计算母板的废料面积
-        // =====================================================================
         int total_waste = 0;
 
         for (int j = 0; j < num_strips_in_stock; j++) {
@@ -288,9 +264,7 @@ void RunHeuristic(ProblemParams& params, ProblemData& data, BPNode& root_node) {
         new_stock.waste_area_ = new_stock.area_ - total_waste;
         new_stock.area_loss_ = new_stock.waste_area_ * params.unit_area_cost_;
 
-        // =====================================================================
         // 判断母板模式是否为新模式
-        // =====================================================================
         int stock_match_count = 0;
         int num_used_stocks = data.used_stocks_.size();
 
@@ -333,21 +307,19 @@ void RunHeuristic(ProblemParams& params, ProblemData& data, BPNode& root_node) {
         stock_id = stock_id + 1;
     }
 
-    // =========================================================================
     // 构建模型矩阵
-    // =========================================================================
     int num_y_cols = root_node.y_patterns_.size();
     int num_x_cols = root_node.x_patterns_.size();
     int num_j = num_strip_types;
     int num_n = num_item_types;
 
-    // ----- 构建完整模型矩阵 -----
+    // 构建完整模型矩阵
     for (int col = 0; col < num_y_cols + num_x_cols; col++) {
         vector<double> temp_col;
 
         for (int row = 0; row < num_j + num_n; row++) {
             if (col < num_y_cols) {
-                // ===== Y 列 (母板模式) =====
+                // Y 列 (母板模式)
                 if (row < num_j) {
                     // C 矩阵: 条带类型产出数量
                     double val = root_node.y_patterns_[col].strip_types_[row].count_;
@@ -361,7 +333,7 @@ void RunHeuristic(ProblemParams& params, ProblemData& data, BPNode& root_node) {
             }
 
             if (col >= num_y_cols) {
-                // ===== X 列 (条带模式) =====
+                // X 列 (条带模式)
                 if (row < num_j) {
                     // D 矩阵: 条带类型对应关系
                     int col_idx = col - num_y_cols;
@@ -389,7 +361,7 @@ void RunHeuristic(ProblemParams& params, ProblemData& data, BPNode& root_node) {
         root_node.matrix_.push_back(temp_col);
     }
 
-    // ----- 构建 Y 列列表 (第一阶段模式) -----
+    // 构建 Y 列列表 (第一阶段模式)
     for (int col = 0; col < num_y_cols; col++) {
         vector<double> temp_col;
 
@@ -407,7 +379,7 @@ void RunHeuristic(ProblemParams& params, ProblemData& data, BPNode& root_node) {
         root_node.y_cols_.push_back(temp_col);
     }
 
-    // ----- 构建 X 列列表 (第二阶段模式) -----
+    // 构建 X 列列表 (第二阶段模式)
     for (int col = num_y_cols; col < num_y_cols + num_x_cols; col++) {
         vector<double> temp_col;
 
@@ -436,7 +408,7 @@ void RunHeuristic(ProblemParams& params, ProblemData& data, BPNode& root_node) {
         root_node.x_cols_.push_back(temp_col);
     }
 
-    // ----- 初始化条带类型列表 -----
+    // 初始化条带类型列表
     for (int k = 0; k < num_item_types; k++) {
         StripType strip_type;
         strip_type.width_ = data.item_types_[k].width_;
