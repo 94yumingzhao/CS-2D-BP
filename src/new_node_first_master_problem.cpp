@@ -4,8 +4,13 @@
 // 功能: 构建并求解分支定界树中新节点的初始受限主问题
 //
 // 与根节点的区别:
-//   根节点: 所有变量边界为 [0, +inf)
-//   新节点: 部分变量被固定为整数值
+//   根节点: 所有变量边界为 [0, +inf), 是纯粹的 LP 松弛
+//   新节点: 部分变量被固定为整数值 (分支约束)
+//
+// 分支约束处理:
+//   - 当前分支变量: 固定为 floor (左子节点) 或 ceil (右子节点)
+//   - 历史分支变量: 保持之前确定的固定值
+//   - 未分支变量: 保持 [0, +inf) 范围
 // =============================================================================
 
 #include "2DBP.h"
@@ -14,6 +19,9 @@ using namespace std;
 
 
 // 求解新节点初始主问题
+// cur_node: 当前要求解的新节点
+// parent_node: 父节点 (包含分支变量信息)
+// 返回: true=可行, false=不可行(需剪枝)
 bool SolveNodeInitMP(
     ProblemParams& params,
     ProblemData& data,
@@ -33,18 +41,18 @@ bool SolveNodeInitMP(
     int num_cols = num_y_cols + num_x_cols;
     int num_rows = num_strip_types + num_item_types;
 
-    // 第一步: 构建约束
+    // 第一步: 构建约束 (与根节点相同)
     IloNumArray con_min(mp_env);
     IloNumArray con_max(mp_env);
 
     for (int row = 0; row < num_strip_types + num_item_types; row++) {
+        // 前 J 行: 条带平衡约束 >= 0
         if (row < num_strip_types) {
-            // 条带平衡约束: >= 0
             con_min.add(IloNum(0));
             con_max.add(IloNum(IloInfinity));
         }
+        // 后 I 行: 子件需求约束 >= demand
         if (row >= num_strip_types) {
-            // 子件需求约束: >= demand
             int row_pos = row - num_strip_types;
             double demand_val = data.item_types_[row_pos].demand_;
             con_min.add(IloNum(demand_val));
@@ -59,9 +67,9 @@ bool SolveNodeInitMP(
     con_max.end();
 
     // 第二步: 构建 Y 变量 (母板切割模式)
+    // 需要根据分支信息设置变量边界
     for (int col = 0; col < num_y_cols; col++) {
-        // 设置目标函数系数
-        IloNum obj_coef = 1;
+        IloNum obj_coef = 1;  // 目标系数 = 1
         IloNumColumn cplex_col = mp_obj(obj_coef);
 
         // 设置约束系数
@@ -72,23 +80,28 @@ bool SolveNodeInitMP(
 
         string var_name = "Y_" + to_string(col + 1);
 
-        // Case 1: 当前分支变量, 固定为 floor (左子节点) 或 ceil (右子节点)
+        // 情况1: 当前列是本次分支的变量
+        // branch_var_id_ 存储父节点选择的分支变量索引
+        // branch_bound_ 存储当前节点的固定值 (左子=floor, 右子=ceil)
         if (col == parent_node.branch_var_id_) {
-            IloNum var_lb = cur_node.branch_bound_;
+            IloNum var_lb = cur_node.branch_bound_;  // 固定为整数值
             IloNum var_ub = cur_node.branch_bound_;
             IloNumVar var_y(cplex_col, var_lb, var_ub, ILOFLOAT, var_name.c_str());
             mp_vars.add(var_y);
         }
-        // Case 2: 非当前分支变量
+        // 情况2: 不是本次分支变量, 需要检查是否为历史分支变量
         else {
             int num_branched = parent_node.branched_vals_.size();
             bool find_flag = 0;
 
-            // Case 2.1: 检查是否为已分支变量
+            // 遍历历史分支变量列表
+            // branched_var_ids_: 存储所有已分支变量的索引
+            // branched_vals_: 存储对应的固定值
             for (int index = 0; index < num_branched; index++) {
                 int branched_idx = parent_node.branched_var_ids_[index];
+
+                // 找到匹配: 该列是历史分支变量, 固定为之前确定的值
                 if (col == branched_idx) {
-                    // 固定为之前确定的整数值
                     IloNum var_lb = parent_node.branched_vals_[index];
                     IloNum var_ub = parent_node.branched_vals_[index];
                     IloNumVar var_y(cplex_col, var_lb, var_ub, ILOFLOAT, var_name.c_str());
@@ -99,7 +112,7 @@ bool SolveNodeInitMP(
                 }
             }
 
-            // Case 2.2: 未分支变量, 保持 [0, +inf) 范围
+            // 未找到: 该列是未分支变量, 保持 [0, +inf) 范围
             if (find_flag == 0) {
                 IloNum var_lb = 0;
                 IloNum var_ub = IloInfinity;
@@ -112,9 +125,9 @@ bool SolveNodeInitMP(
     }
 
     // 第三步: 构建 X 变量 (条带切割模式)
+    // 处理逻辑与 Y 变量类似
     for (int col = 0; col < num_x_cols; col++) {
-        // 设置目标函数系数
-        IloNum obj_coef = 0;
+        IloNum obj_coef = 0;  // 目标系数 = 0
         IloNumColumn cplex_col = mp_obj(obj_coef);
 
         // 设置约束系数
@@ -125,21 +138,24 @@ bool SolveNodeInitMP(
 
         string var_name = "X_" + to_string(col + 1);
 
-        // Case 1: 当前分支变量
+        // 情况1: 当前列是本次分支变量
+        // 注意: X 变量的全局索引 = col + num_y_cols
         if (col + num_y_cols == parent_node.branch_var_id_) {
             IloNum var_lb = cur_node.branch_bound_;
             IloNum var_ub = cur_node.branch_bound_;
             IloNumVar var_x(cplex_col, var_lb, var_ub, ILOFLOAT, var_name.c_str());
             mp_vars.add(var_x);
         }
-        // Case 2: 非当前分支变量
+        // 情况2: 不是本次分支变量
         else {
             int num_branched = parent_node.branched_vals_.size();
             bool find_flag = 0;
 
-            // Case 2.1: 检查是否为已分支变量
+            // 遍历历史分支变量列表
             for (int pos = 0; pos < num_branched; pos++) {
                 int branched_idx = parent_node.branched_var_ids_[pos];
+
+                // 找到匹配: 历史分支变量
                 if (col == branched_idx) {
                     IloNum var_lb = parent_node.branched_vals_[pos];
                     IloNum var_ub = parent_node.branched_vals_[pos];
@@ -151,7 +167,7 @@ bool SolveNodeInitMP(
                 }
             }
 
-            // Case 2.2: 未分支变量
+            // 未找到: 未分支变量
             if (find_flag == 0) {
                 IloNum var_lb = 0;
                 IloNum var_ub = IloInfinity;
@@ -171,13 +187,14 @@ bool SolveNodeInitMP(
     mp_cplex.exportModel("New Node First Master Problem.lp");
     bool mp_feasible = mp_cplex.solve();
 
+    // 不可行: 分支约束导致无可行解, 标记为剪枝
+    // 这说明该分支方向无法产生可行的整数解
     if (mp_feasible == 0) {
-        // 不可行: 标记剪枝
         cur_node.prune_flag_ = 1;
         cout << "[节点_" << cur_node.id_ << "] 初始主问题不可行, 需剪枝\n";
     }
+    // 可行: 提取解和对偶价格
     else {
-        // 可行: 输出结果并提取对偶价格
         cout << "[节点_" << cur_node.id_ << "] 初始主问题可行, 目标值 = "
              << fixed << setprecision(4) << mp_cplex.getValue(mp_obj) << "\n";
         cout.unsetf(ios::fixed);
@@ -203,6 +220,7 @@ bool SolveNodeInitMP(
         cur_node.duals_.clear();
 
         double dual_val = -1;
+        // 前 J 个: 条带平衡约束的对偶价格
         for (int row = 0; row < num_strip_types; row++) {
             dual_val = mp_cplex.getDual(mp_cons[row]);
             if (std::abs(dual_val) < kZeroTolerance) {
@@ -211,6 +229,7 @@ bool SolveNodeInitMP(
             cur_node.duals_.push_back(dual_val);
         }
 
+        // 后 I 个: 子件需求约束的对偶价格
         for (int row = num_strip_types; row < num_strip_types + num_item_types; row++) {
             dual_val = mp_cplex.getDual(mp_cons[row]);
             if (std::abs(dual_val) < kZeroTolerance) {
