@@ -88,8 +88,8 @@ bool SolveNodeInitMP(ProblemParams& params, ProblemData& data,
     IloEnv& env, IloModel& model, IloObjective& obj,
     IloRangeArray& cons, IloNumVarArray& vars, BPNode* node) {
 
-    int num_y_cols = node->y_columns_.size();
-    int num_x_cols = node->x_columns_.size();
+    int num_y_cols = static_cast<int>(node->y_columns_.size());
+    int num_x_cols = static_cast<int>(node->x_columns_.size());
     int num_strip_types = params.num_strip_types_;
     int num_item_types = params.num_item_types_;
     int num_rows = num_strip_types + num_item_types;
@@ -216,7 +216,7 @@ bool SolveNodeUpdateMP(ProblemParams& params, ProblemData& data,
             cplex_col += cons[num_strip_types + i](0);
         }
 
-        int col_id = node->y_columns_.size() + 1;
+        int col_id = static_cast<int>(node->y_columns_.size()) + 1;
         string var_name = "Y_" + to_string(col_id);
         IloNumVar var(cplex_col, 0, IloInfinity, ILOFLOAT, var_name.c_str());
         vars.add(var);
@@ -240,7 +240,7 @@ bool SolveNodeUpdateMP(ProblemParams& params, ProblemData& data,
             cplex_col += cons[num_strip_types + i](node->new_x_col_.pattern_[i]);
         }
 
-        int col_id = node->x_columns_.size() + 1;
+        int col_id = static_cast<int>(node->x_columns_.size()) + 1;
         string var_name = "X_" + to_string(col_id);
         IloNumVar var(cplex_col, 0, IloInfinity, ILOFLOAT, var_name.c_str());
         vars.add(var);
@@ -319,8 +319,8 @@ bool SolveNodeFinalMP(ProblemParams& params, ProblemData& data,
     }
 
     node->solution_.x_columns_.clear();
-    int y_count = node->y_columns_.size();
-    for (int col = 0; col < (int)node->x_columns_.size(); col++) {
+    int y_count = static_cast<int>(node->y_columns_.size());
+    for (int col = 0; col < static_cast<int>(node->x_columns_.size()); col++) {
         double val = cplex.getValue(vars[y_count + col]);
         if (fabs(val) < kZeroTolerance) val = 0;
 

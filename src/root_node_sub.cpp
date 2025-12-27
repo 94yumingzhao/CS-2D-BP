@@ -89,7 +89,7 @@ bool SolveRootSP1ArcFlow(ProblemParams& params, ProblemData& data, BPNode& node)
     IloNumVarArray vars(env);
 
     SP1ArcFlowData& arc_data = data.sp1_arc_data_;
-    int num_arcs = arc_data.arc_list_.size();
+    int num_arcs = static_cast<int>(arc_data.arc_list_.size());
     int num_strip_types = params.num_strip_types_;
 
     // 为每个Arc创建0-1变量
@@ -138,7 +138,7 @@ bool SolveRootSP1ArcFlow(ProblemParams& params, ProblemData& data, BPNode& node)
     end_expr.end();
 
     // 中间节点流量守恒
-    int num_mid = arc_data.mid_nodes_.size();
+    int num_mid = static_cast<int>(arc_data.mid_nodes_.size());
     for (int i = 0; i < num_mid; i++) {
         IloExpr in_expr(env);
         IloExpr out_expr(env);
@@ -344,7 +344,7 @@ bool SolveRootSP2ArcFlow(ProblemParams& params, ProblemData& data,
     }
 
     SP2ArcFlowData& arc_data = data.sp2_arc_data_[strip_type_id];
-    int num_arcs = arc_data.arc_list_.size();
+    int num_arcs = static_cast<int>(arc_data.arc_list_.size());
     int num_item_types = params.num_item_types_;
     int num_strip_types = params.num_strip_types_;
 
@@ -403,7 +403,7 @@ bool SolveRootSP2ArcFlow(ProblemParams& params, ProblemData& data,
     end_expr.end();
 
     // 中间节点流量守恒
-    int num_mid = arc_data.mid_nodes_.size();
+    int num_mid = static_cast<int>(arc_data.mid_nodes_.size());
     for (int i = 0; i < num_mid; i++) {
         IloExpr in_expr(env);
         IloExpr out_expr(env);

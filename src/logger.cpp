@@ -20,12 +20,19 @@ DualStreambuf::DualStreambuf(streambuf* console_buf, streambuf* file_buf)
 // 获取当前时间戳
 string DualStreambuf::GetCurrentTimestamp() {
     auto now = chrono::system_clock::now();
-    auto time_t = chrono::system_clock::to_time_t(now);
+    auto time_t_val = chrono::system_clock::to_time_t(now);
     auto ms = chrono::duration_cast<chrono::milliseconds>(
         now.time_since_epoch()) % 1000;
 
+    tm tm_buf;
+#ifdef _WIN32
+    localtime_s(&tm_buf, &time_t_val);
+#else
+    localtime_r(&time_t_val, &tm_buf);
+#endif
+
     stringstream ss;
-    ss << "[" << put_time(localtime(&time_t), "%Y-%m-%d %H:%M:%S")
+    ss << "[" << put_time(&tm_buf, "%Y-%m-%d %H:%M:%S")
        << "." << setfill('0') << setw(3) << ms.count() << "] ";
     return ss.str();
 }

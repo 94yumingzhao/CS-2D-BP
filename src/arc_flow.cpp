@@ -40,7 +40,7 @@ void GenerateSP1Arcs(ProblemData& data, ProblemParams& params) {
             if (end <= stock_width) {
                 array<int, 2> arc = {start, end};
                 if (arc_data.arc_to_index_.find(arc) == arc_data.arc_to_index_.end()) {
-                    int idx = arc_data.arc_list_.size();
+                    int idx = static_cast<int>(arc_data.arc_list_.size());
                     arc_data.arc_to_index_[arc] = idx;
                     arc_data.arc_list_.push_back(arc);
                     node_set.insert(start);
@@ -61,11 +61,11 @@ void GenerateSP1Arcs(ProblemData& data, ProblemParams& params) {
     }
 
     // 分类Arc
-    int num_mid = arc_data.mid_nodes_.size();
+    int num_mid = static_cast<int>(arc_data.mid_nodes_.size());
     arc_data.mid_in_arcs_.resize(num_mid);
     arc_data.mid_out_arcs_.resize(num_mid);
 
-    for (int idx = 0; idx < (int)arc_data.arc_list_.size(); idx++) {
+    for (int idx = 0; idx < static_cast<int>(arc_data.arc_list_.size()); idx++) {
         int start = arc_data.arc_list_[idx][0];
         int end = arc_data.arc_list_[idx][1];
 
@@ -142,7 +142,7 @@ void GenerateSP2Arcs(ProblemData& data, ProblemParams& params, int strip_type_id
                 if (end <= stock_length) {
                     array<int, 2> arc = {start, end};
                     if (arc_data.arc_to_index_.find(arc) == arc_data.arc_to_index_.end()) {
-                        int idx = arc_data.arc_list_.size();
+                        int idx = static_cast<int>(arc_data.arc_list_.size());
                         arc_data.arc_to_index_[arc] = idx;
                         arc_data.arc_list_.push_back(arc);
                         node_set.insert(start);
@@ -164,11 +164,11 @@ void GenerateSP2Arcs(ProblemData& data, ProblemParams& params, int strip_type_id
     }
 
     // 分类Arc
-    int num_mid = arc_data.mid_nodes_.size();
+    int num_mid = static_cast<int>(arc_data.mid_nodes_.size());
     arc_data.mid_in_arcs_.resize(num_mid);
     arc_data.mid_out_arcs_.resize(num_mid);
 
-    for (int idx = 0; idx < (int)arc_data.arc_list_.size(); idx++) {
+    for (int idx = 0; idx < static_cast<int>(arc_data.arc_list_.size()); idx++) {
         int start = arc_data.arc_list_[idx][0];
         int end = arc_data.arc_list_[idx][1];
 

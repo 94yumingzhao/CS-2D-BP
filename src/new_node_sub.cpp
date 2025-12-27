@@ -78,7 +78,7 @@ bool SolveNodeSP1Knapsack(ProblemParams& params, ProblemData& data, BPNode* node
 bool SolveNodeSP1ArcFlow(ProblemParams& params, ProblemData& data, BPNode* node) {
     // 与根节点类似, 调用Arc Flow模型
     SP1ArcFlowData& arc_data = data.sp1_arc_data_;
-    int num_arcs = arc_data.arc_list_.size();
+    int num_arcs = static_cast<int>(arc_data.arc_list_.size());
     int num_strip_types = params.num_strip_types_;
 
     if (num_arcs == 0) {
@@ -128,7 +128,7 @@ bool SolveNodeSP1ArcFlow(ProblemParams& params, ProblemData& data, BPNode* node)
     model.add(end_expr == 1);
     end_expr.end();
 
-    int num_mid = arc_data.mid_nodes_.size();
+    int num_mid = static_cast<int>(arc_data.mid_nodes_.size());
     for (int i = 0; i < num_mid; i++) {
         IloExpr in_expr(env);
         IloExpr out_expr(env);
@@ -302,7 +302,7 @@ bool SolveNodeSP2ArcFlow(ProblemParams& params, ProblemData& data,
     }
 
     SP2ArcFlowData& arc_data = data.sp2_arc_data_[strip_type_id];
-    int num_arcs = arc_data.arc_list_.size();
+    int num_arcs = static_cast<int>(arc_data.arc_list_.size());
     int num_item_types = params.num_item_types_;
     int num_strip_types = params.num_strip_types_;
 
@@ -353,7 +353,7 @@ bool SolveNodeSP2ArcFlow(ProblemParams& params, ProblemData& data,
     model.add(end_expr == 1);
     end_expr.end();
 
-    int num_mid = arc_data.mid_nodes_.size();
+    int num_mid = static_cast<int>(arc_data.mid_nodes_.size());
     for (int i = 0; i < num_mid; i++) {
         IloExpr in_expr(env);
         IloExpr out_expr(env);

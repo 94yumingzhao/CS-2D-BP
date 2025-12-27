@@ -75,7 +75,7 @@ tuple<int, int, int> LoadInput(ProblemParams& params, ProblemData& data) {
     fin.close();
 
     // 条带类型数量等于不同宽度的数量
-    params.num_strip_types_ = unique_widths.size();
+    params.num_strip_types_ = static_cast<int>(unique_widths.size());
     params.num_items_ = total_demand;
 
     LOG_FMT("[数据] 子件总需求: %d\n", total_demand);

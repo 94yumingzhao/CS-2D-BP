@@ -40,7 +40,7 @@ int SelectBranchVar(BPNode* node) {
     int branch_idx = -1;
 
     // 检查Y列
-    int y_count = node->solution_.y_columns_.size();
+    int y_count = static_cast<int>(node->solution_.y_columns_.size());
     for (int i = 0; i < y_count; i++) {
         double val = node->solution_.y_columns_[i].value_;
         if (val > kZeroTolerance) {
