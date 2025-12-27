@@ -1,333 +1,320 @@
 // =============================================================================
 // 2DBP.h - 二维下料问题分支定价求解器 主头文件
-// =============================================================================
-//
-// 项目: CS-2D-BP (2D Cutting Stock Problem - Branch and Price)
-// 描述: 采用两阶段切割的二维下料问题分支定价算法实现
-//
-// 命名规范 (Google C++ Style Guide):
-//   结构体/类: PascalCase       函数: PascalCase
-//   成员变量:  snake_case_      局部变量: snake_case
-//   常量:      kPascalCase      宏: ALL_CAPS
-//
-// 缩写说明:
-//   CG-列生成  MP-主问题  SP-子问题  SP1-宽度背包  SP2-长度背包
-//   LB-下界    UB-上界    RC-检验数  BP-分支定价
-//
+// 项目: CS-2D-BP-Arc
+// 描述: 采用两阶段切割的二维下料问题分支定价算法, 子问题支持Arc Flow/DP求解
 // =============================================================================
 
-#ifndef CS_2D_BP_H_
-#define CS_2D_BP_H_
+#ifndef CS_2D_BP_ARC_H_
+#define CS_2D_BP_ARC_H_
 
-// C 系统头文件
-#include <cmath>
-#include <cstdio>
-
-// C++ 标准库
 #include <algorithm>
 #include <array>
+#include <cmath>
+#include <cstdio>
+#include <ctime>
+#include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <map>
 #include <queue>
+#include <set>
 #include <sstream>
+#include <stack>
 #include <string>
 #include <vector>
 
-// 第三方库
 #include <ilcplex/ilocplex.h>
 
-// 项目头文件
 #include "logger.h"
 
 using namespace std;
 
-
-// =============================================================================
 // 全局常量
-// =============================================================================
-
 constexpr double kRcTolerance = 1.0e-6;     // 检验数容差
-constexpr double kZeroTolerance = 1.0e-10;  // 零值容差 (浮点数归零判断)
-constexpr int kMaxCgIter = 100;             // 最大迭代次数
-constexpr int kMaxBpNodes = 30;             // 最大分支定价节点数 (可调整)
+constexpr double kZeroTolerance = 1.0e-10;  // 零值容差
+constexpr int kMaxCgIter = 100;             // 列生成最大迭代次数
+const string kFilePath = "data/test.txt";   // 默认数据文件路径
 
+// 子问题求解方法枚举
+enum SPMethod {
+    kCplexIP = 0,   // CPLEX整数规划
+    kArcFlow = 1,   // Arc Flow模型
+    kDP = 2         // 动态规划
+};
 
-// =============================================================================
-// 数据结构定义
-// =============================================================================
-
-// 子件类型
+// 子件类型: 存储同一规格子件的类型信息
 struct ItemType {
-    int type_id_ = -1;        // 类型索引 (从1开始)
-    int length_ = -1;         // 长度 (X轴)
-    int width_ = -1;          // 宽度 (Y轴)
-    double demand_ = -1;      // 需求量
-    int count_ = 0;           // 当前模式中数量
+    int type_id_ = -1;      // 类型编号 (0, 1, 2, ...)
+    int length_ = -1;       // 长度 (X轴)
+    int width_ = -1;        // 宽度 (Y轴)
+    int demand_ = -1;       // 需求量
 };
 
-// 条带类型
+// 条带类型: 存储同一宽度条带的类型信息
+// 条带宽度由其包含的子件宽度决定, 长度等于母板长度
 struct StripType {
-    int type_id_ = -1;        // 类型索引 (从1开始)
-    int width_ = -1;          // 宽度 (Y轴)
-    int length_ = -1;         // 长度 (X轴, 等于母板长度)
-    int count_ = 0;           // 当前模式中数量
+    int type_id_ = -1;      // 类型编号 (0, 1, 2, ...)
+    int width_ = -1;        // 宽度 (Y轴, 等于对应子件宽度)
+    int length_ = -1;       // 长度 (X轴, 等于母板长度)
 };
 
-// 母板类型
-struct StockType {
-    int type_id_ = -1;        // 类型索引 (当前版本固定为0)
-    int count_ = 0;           // 使用数量
+// SP2 Arc Flow网络数据: 用于条带上的子件排列 (长度方向背包)
+// 节点表示条带上的位置 (0到stock_length), Arc表示放置一个子件
+struct SP2ArcFlowData {
+    int strip_type_id_ = -1;                // 对应的条带类型
+    vector<int> begin_nodes_;               // 起点节点 (位置0)
+    vector<int> end_nodes_;                 // 终点节点 (位置stock_length)
+    vector<int> mid_nodes_;                 // 中间节点
+    vector<array<int, 2>> arc_list_;        // Arc列表 [起点, 终点]
+    map<array<int, 2>, int> arc_to_index_;  // Arc到索引的映射
+
+    // Arc分类索引
+    vector<int> begin_arc_indices_;         // 从起点出发的Arc
+    vector<int> end_arc_indices_;           // 到达终点的Arc
+    vector<vector<int>> mid_in_arcs_;       // 中间节点入弧
+    vector<vector<int>> mid_out_arcs_;      // 中间节点出弧
 };
 
-// 单个子件
-struct Item {
-    // 标识
-    int id_ = -1;             // 实例索引 (全局唯一, 从1开始)
-    int type_id_ = -1;        // 所属类型索引
+// SP1 Arc Flow网络数据: 用于母板上的条带排列 (宽度方向背包)
+// 节点表示母板宽度方向的位置 (0到stock_width), Arc表示放置一种条带
+struct SP1ArcFlowData {
+    vector<int> begin_nodes_;               // 起点节点 (位置0)
+    vector<int> end_nodes_;                 // 终点节点 (位置stock_width)
+    vector<int> mid_nodes_;                 // 中间节点
+    vector<array<int, 2>> arc_list_;        // Arc列表 [起点, 终点]
+    map<array<int, 2>, int> arc_to_index_;  // Arc到索引的映射
 
-    // 规格
-    int length_ = -1;         // 长度 (X轴)
-    int width_ = -1;          // 宽度 (Y轴)
-    int area_ = -1;           // 面积
-    int demand_ = -1;         // 需求量 (冗余存储)
-
-    // 位置
-    int x_ = -1;              // 左上角X坐标
-    int y_ = -1;              // 左上角Y坐标
-
-    // 归属
-    int strip_id_ = -1;       // 所属条带索引
-    int stock_id_ = -1;       // 所属母板索引
-
-    // 状态
-    int assign_flag_ = 0;     // 分配标志: 0=未分配, 1=已分配
-
-    // 成本
-    int cut_dist_ = -1;       // 切割距离
-    int cut_loss_ = -1;       // 切割损耗
+    // Arc分类索引
+    vector<int> begin_arc_indices_;         // 从起点出发的Arc
+    vector<int> end_arc_indices_;           // 到达终点的Arc
+    vector<vector<int>> mid_in_arcs_;       // 中间节点入弧
+    vector<vector<int>> mid_out_arcs_;      // 中间节点出弧
 };
 
-// 单个条带
-struct Strip {
-    // 标识
-    int id_ = -1;             // 实例索引 (全局唯一)
-    int type_id_ = -1;        // 类型索引
-    int pattern_ = -1;        // 切割模式编号
-
-    // 包含的子件
-    vector<Item> items_;
-    vector<ItemType> item_types_;
-
-    // 规格
-    int length_ = -1;         // 长度 (=母板长度)
-    int width_ = -1;          // 宽度 (=首个子件宽度)
-    int area_ = -1;
-
-    // 位置
-    int x_ = -1;
-    int y_ = -1;
-
-    // 归属
-    int stock_id_ = -1;
-
-    // 成本
-    int cut_dist_ = -1;
-    int cut_loss_ = -1;
-    int waste_area_ = -1;
-    int area_loss_ = -1;
+// 新列: 列生成过程中子问题产生的新切割方案
+struct NewColumn {
+    vector<int> pattern_;               // 切割方案系数
+    set<array<int, 2>> arc_set_;        // 对应的Arc集合
 };
 
-// 单个母板
-struct Stock {
-    // 标识
-    int id_ = -1;             // 实例索引 (全局唯一)
-    int type_id_ = 0;         // 类型索引 (当前版本固定为0)
-    int pattern_ = -1;        // 切割模式编号
-
-    // 包含的条带
-    vector<Strip> strips_;
-    vector<StripType> strip_types_;
-
-    // 规格
-    int length_ = -1;         // 长度 (X轴)
-    int width_ = -1;          // 宽度 (Y轴)
-    int area_ = -1;
-
-    // 位置
-    int x_ = -1;
-    int y_ = -1;
-
-    // 成本
-    int cut_dist_ = -1;
-    int cut_loss_ = -1;
-    int waste_area_ = -1;
-    int area_loss_ = -1;
+// Y列 (第一阶段): 母板切割为条带的方案
+struct YColumn {
+    vector<int> pattern_;               // pattern_[j] = 条带类型j的数量
+    set<array<int, 2>> arc_set_;        // 对应的Arc集合 (宽度方向)
+    double value_ = 0.0;                // LP解值
 };
 
-// 分支定界节点
+// X列 (第二阶段): 条带切割为子件的方案
+struct XColumn {
+    int strip_type_id_ = -1;            // 所属条带类型
+    vector<int> pattern_;               // pattern_[i] = 子件类型i的数量
+    set<array<int, 2>> arc_set_;        // 对应的Arc集合 (长度方向)
+    double value_ = 0.0;                // LP解值
+};
+
+// 节点解: 存储分支定价节点的LP求解结果
+struct NodeSolution {
+    vector<YColumn> y_columns_;         // Y列集合
+    vector<XColumn> x_columns_;         // X列集合
+    double obj_val_ = -1;               // 目标函数值 (母板使用量)
+};
+
+// 分支定价节点: 分支定价树中的节点
 struct BPNode {
+    // 子问题求解方法
+    int sp1_method_ = 0;        // SP1求解方法: 0=CPLEX, 1=ArcFlow, 2=DP
+    int sp2_method_ = 0;        // SP2求解方法: 0=CPLEX, 1=ArcFlow, 2=DP
+
     // 节点标识
-    int id_ = -1;                     // 节点索引 (根节点为1)
-
-    // 父节点信息
-    int parent_id_ = -1;              // 父节点索引 (-1表示根节点)
-    int parent_branch_dir_ = -1;      // 父节点分支方向: 1=左, 2=右
-    double parent_branch_val_ = -1;   // 父节点分支变量原始值
-
-    // 节点状态
-    double lower_bound_ = -1;         // 下界值 (LP松弛最优值)
-    int branch_dir_ = -1;             // 分支标志: 1=已生成左子节点, 2=已生成右子节点
-    int prune_flag_ = -1;             // 剪枝标志: 0=未剪枝, 1=已剪枝
-    int branched_flag_ = -1;          // 分支完成标志: 0=未分支, 1=已分支
-
-    // 分支变量信息
-    int branch_var_id_ = -1;          // 待分支变量列索引 (0-based)
-    double branch_var_val_ = -1;      // 待分支变量解值 (分数值)
-    double branch_floor_ = -1;        // 向下取整值
-    double branch_ceil_ = -1;         // 向上取整值
-    double branch_bound_ = -1;        // 最终确定的整数值
-
-    // 分支历史
-    vector<int> branched_var_ids_;    // 已分支变量列索引
-    vector<double> branched_bounds_;  // 已分支变量整数值
-    vector<double> branched_vals_;    // 已分支变量原始解值
-
-    // 解信息
-    vector<double> solution_;         // 所有变量最终解值
-
-    // 列生成迭代数据
-    int iter_ = -1;                   // 当前迭代次数
-    vector<vector<double>> matrix_;   // 主问题系数矩阵
-    vector<double> duals_;            // 主问题约束对偶价格
-
-    // 切割模式存储
-    vector<Stock> y_patterns_;        // 第一阶段模式 (母板切割方案)
-    vector<Strip> x_patterns_;        // 第二阶段模式 (条带切割方案)
-    vector<vector<double>> y_cols_;   // 第一阶段模式系数列
-    vector<vector<double>> x_cols_;   // 第二阶段模式系数列
-
-    // 新生成的列
-    vector<double> new_y_col_;        // 新的第一阶段模式列
-    vector<vector<double>> new_x_cols_;  // 新的第二阶段模式列集合
-
-    // 子问题信息
-    double sp2_obj_ = -1;             // SP2最优目标值
-    vector<double> sp2_solution_;     // SP2最优解
-    int col_type_flag_ = -1;          // 新列类型: 1=Y列, 0=X列
-};
-
-// 全局参数
-struct ProblemParams {
-    // 算法控制
-    bool is_finished_ = false;        // 启发式完成标志
-
-    // 问题规模
-    int num_item_types_ = -1;         // 子件类型数量 (N)
-    int num_strip_types_ = -1;        // 条带类型数量 (J)
-    int num_stock_types_ = -1;        // 母板类型数量
-    int num_items_ = -1;              // 子件总数
-    int num_strips_ = -1;             // 条带总数
-    int num_stocks_ = -1;             // 可用母板数量
-
-    // 母板尺寸
-    int stock_length_ = -1;           // 长度 (L, X轴)
-    int stock_width_ = -1;            // 宽度 (W, Y轴)
-
-    // 成本
-    int unit_cut_cost_ = -1;          // 单位切割损耗
-    int unit_area_cost_ = -1;         // 单位面积损耗
-    int total_cut_cost_ = -1;         // 总切割损耗
-    int total_area_cost_ = -1;        // 总面积损耗
-
-    // 分支定界树
-    int tree_depth_ = -1;             // 当前层数
-    int num_nodes_ = -1;              // 已生成节点总数
-
-    // 最优解
-    double best_obj_ = -1;            // 当前最优下界
+    int id_ = -1;               // 节点编号
+    int parent_id_ = -1;        // 父节点编号 (-1表示根节点)
+    double lower_bound_ = -1;   // 节点下界 (LP松弛解)
 
     // 分支状态
-    int branch_state_ = -1;           // 1=生成左子节点, 2=生成右子节点, 3=搜索其他节点
-    int need_search_ = -1;            // 0=继续分支, 1=搜索其他节点
-    int fathom_dir_ = -1;             // 深入方向: 1=左, 2=右
-    int is_at_root_ = -1;             // 1=当前在根节点, 0=不在
+    int branch_dir_ = -1;       // 分支方向: 1=左, 2=右
+    int prune_flag_ = 0;        // 剪枝标志: 0=未剪枝, 1=已剪枝
+    int branched_flag_ = 0;     // 分支完成标志: 0=未分支, 1=已分支
+
+    // 分支变量信息
+    int branch_var_id_ = -1;            // 待分支变量索引
+    double branch_var_val_ = -1;        // 待分支变量解值 (分数值)
+    double branch_floor_ = -1;          // 向下取整值
+    double branch_ceil_ = -1;           // 向上取整值
+
+    // 分支历史 (累积的分支约束)
+    vector<int> branched_var_ids_;      // 已分支变量索引
+    vector<double> branched_bounds_;    // 已分支变量整数边界
+
+    // 主问题系数矩阵
+    vector<vector<double>> matrix_;             // 完整系数矩阵
+    vector<YColumn> y_columns_;                 // Y列集合
+    vector<XColumn> x_columns_;                 // X列集合
+    vector<set<array<int, 2>>> y_arc_sets_;     // Y列对应的Arc集合
+    vector<set<array<int, 2>>> x_arc_sets_;     // X列对应的Arc集合
+
+    // 列生成迭代信息
+    int iter_ = -1;                     // 当前迭代次数
+    vector<double> duals_;              // 对偶价格
+    NewColumn new_y_col_;               // 新Y列
+    NewColumn new_x_col_;               // 新X列
+    int new_strip_type_ = -1;           // 新X列对应的条带类型
+
+    // SP2临时数据
+    double sp2_obj_ = -1;               // SP2目标值
+    vector<double> sp2_solution_;       // SP2解
+
+    // 节点解
+    NodeSolution solution_;             // 求解结果
+
+    // 链表指针: 用于节点队列管理
+    BPNode* next_ = nullptr;
 };
 
-// 全局列表
+// 问题参数: 存储算法运行过程中的全局参数
+struct ProblemParams {
+    // 问题规模
+    int num_item_types_ = -1;           // 子件类型数量 (N)
+    int num_strip_types_ = -1;          // 条带类型数量 (J)
+    int num_items_ = -1;                // 子件总数
+
+    // 母板尺寸
+    int stock_length_ = -1;             // 长度 (L, X轴)
+    int stock_width_ = -1;              // 宽度 (W, Y轴)
+
+    // 子问题方法设置
+    int sp1_method_ = kCplexIP;         // SP1默认方法
+    int sp2_method_ = kCplexIP;         // SP2默认方法
+
+    // 分支定价树
+    int node_counter_ = 1;              // 节点编号计数器
+    double optimal_lb_ = INFINITY;      // 当前最优下界
+
+    // 全局最优整数解信息
+    double global_best_int_ = INFINITY;         // 最优整数解目标值
+    vector<YColumn> global_best_y_cols_;        // 最优解Y列
+    vector<XColumn> global_best_x_cols_;        // 最优解X列
+    double gap_ = INFINITY;                     // 最优性间隙
+
+    // 初始矩阵 (启发式生成)
+    vector<vector<int>> init_y_matrix_;         // 初始Y列矩阵
+    vector<vector<int>> init_x_matrix_;         // 初始X列矩阵
+};
+
+// 问题数据: 存储问题的输入数据和Arc Flow模型数据
 struct ProblemData {
-    vector<BPNode> nodes_;            // 分支节点列表
-    vector<Stock> stocks_;            // 可用母板列表
-    vector<Strip> strips_;            // 已生成条带列表
-    vector<Item> items_;              // 子件列表
-    vector<StripType> strip_types_;   // 条带类型列表
-    vector<ItemType> item_types_;     // 子件类型列表
-    vector<Stock> used_stocks_;       // 已使用母板列表
-    vector<Item> assigned_items_;     // 已分配子件列表
+    // 基本数据
+    vector<ItemType> item_types_;               // 子件类型列表
+    vector<StripType> strip_types_;             // 条带类型列表
+    vector<int> item_lengths_;                  // 子件长度列表 (降序)
+    vector<int> strip_widths_;                  // 条带宽度列表 (降序)
+
+    // 索引映射
+    map<int, int> length_to_item_index_;        // 长度到子件类型索引
+    map<int, int> width_to_strip_index_;        // 宽度到条带类型索引
+    map<int, vector<int>> width_to_item_indices_;  // 宽度到该宽度的子件类型列表
+
+    // SP1 Arc Flow网络 (宽度方向)
+    SP1ArcFlowData sp1_arc_data_;
+
+    // SP2 Arc Flow网络 (长度方向, 每种条带类型一个)
+    vector<SP2ArcFlowData> sp2_arc_data_;
 };
 
+// Arc Flow函数 (arc_flow.cpp)
+void GenerateSP1Arcs(ProblemData& data, ProblemParams& params);
+void GenerateSP2Arcs(ProblemData& data, ProblemParams& params, int strip_type_id);
+void GenerateAllArcs(ProblemData& data, ProblemParams& params);
+void ConvertPatternToArcSet(vector<int>& pattern, vector<int>& sizes,
+    set<array<int, 2>>& arc_set);
+void GenerateYArcSetMatrix(BPNode& node, vector<int>& strip_widths);
+void GenerateXArcSetMatrix(BPNode& node, vector<int>& item_lengths, int strip_type);
 
-// =============================================================================
-// 函数声明
-// =============================================================================
-
-// 工具函数
+// 输入输出函数 (input.cpp)
 void SplitString(const string& s, vector<string>& v, const string& c);
+tuple<int, int, int> LoadInput(ProblemParams& params, ProblemData& data);
+void BuildLengthIndex(ProblemData& data);
+void BuildWidthIndex(ProblemData& data);
 
-// 数据读取
-void LoadInput(ProblemParams& params, ProblemData& data);
+// 打印函数 (input.cpp)
+void PrintParams(ProblemParams& params);
+void PrintDemand(ProblemData& data);
+void PrintInitMatrix(ProblemParams& params);
+void PrintCGSolution(BPNode* node, ProblemData& data);
+void PrintNodeInfo(BPNode* node);
 
-// 启发式求解
+// 启发式函数 (heuristic.cpp)
 void RunHeuristic(ProblemParams& params, ProblemData& data, BPNode& root_node);
 
-// 列生成求解
+// 根节点列生成函数 (root_node.cpp)
 void SolveRootCG(ProblemParams& params, ProblemData& data, BPNode& root_node);
+bool SolveRootInitMP(ProblemParams& params, ProblemData& data,
+    IloEnv& env, IloModel& model, IloObjective& obj,
+    IloRangeArray& cons, IloNumVarArray& vars, BPNode& root_node);
+bool SolveRootUpdateMP(ProblemParams& params, ProblemData& data,
+    IloEnv& env, IloModel& model, IloObjective& obj,
+    IloRangeArray& cons, IloNumVarArray& vars, BPNode& node);
+bool SolveRootFinalMP(ProblemParams& params, ProblemData& data,
+    IloEnv& env, IloModel& model, IloObjective& obj,
+    IloRangeArray& cons, IloNumVarArray& vars, BPNode& node);
 
-bool SolveRootInitMP(
-    ProblemParams& params, ProblemData& data,
-    IloEnv& mp_env, IloModel& mp_model, IloObjective& mp_obj,
-    IloRangeArray& mp_cons, IloNumVarArray& mp_vars,
-    BPNode& root_node);
+// 根节点子问题函数 (root_node_sub.cpp)
+// SP1: 宽度背包 - 选择条带放置在母板上
+// 目标: max sum(v_j * G_j), 约束: sum(w_j * G_j) <= W
+bool SolveRootSP1Knapsack(ProblemParams& params, ProblemData& data, BPNode& node);
+bool SolveRootSP1ArcFlow(ProblemParams& params, ProblemData& data, BPNode& node);
+bool SolveRootSP1DP(ProblemParams& params, ProblemData& data, BPNode& node);
 
-// 子问题求解
-int SolveSP1(ProblemParams& params, ProblemData& data, BPNode& node);
-int SolveSP2(ProblemParams& params, ProblemData& data, BPNode& node, int strip_type_id);
+// SP2: 长度背包 - 选择子件放置在条带上
+// 目标: max sum(pi_i * D_i), 约束: sum(l_i * D_i) <= L
+bool SolveRootSP2Knapsack(ProblemParams& params, ProblemData& data,
+    BPNode& node, int strip_type_id);
+bool SolveRootSP2ArcFlow(ProblemParams& params, ProblemData& data,
+    BPNode& node, int strip_type_id);
+bool SolveRootSP2DP(ProblemParams& params, ProblemData& data,
+    BPNode& node, int strip_type_id);
 
-// 主问题更新
-void UpdateMP(
-    ProblemParams& params, ProblemData& data,
-    IloEnv& mp_env, IloModel& mp_model, IloObjective& mp_obj,
-    IloRangeArray& mp_cons, IloNumVarArray& mp_vars,
-    BPNode& node);
+// 非根节点列生成函数 (new_node.cpp)
+int SolveNodeCG(ProblemParams& params, ProblemData& data, BPNode* node);
+bool SolveNodeInitMP(ProblemParams& params, ProblemData& data,
+    IloEnv& env, IloModel& model, IloObjective& obj,
+    IloRangeArray& cons, IloNumVarArray& vars, BPNode* node);
+bool SolveNodeUpdateMP(ProblemParams& params, ProblemData& data,
+    IloEnv& env, IloModel& model, IloObjective& obj,
+    IloRangeArray& cons, IloNumVarArray& vars, BPNode* node);
+bool SolveNodeFinalMP(ProblemParams& params, ProblemData& data,
+    IloEnv& env, IloModel& model, IloObjective& obj,
+    IloRangeArray& cons, IloNumVarArray& vars, BPNode* node);
 
-void SolveFinalMP(
-    ProblemParams& params, ProblemData& data,
-    IloEnv& mp_env, IloModel& mp_model, IloObjective& mp_obj,
-    IloRangeArray& mp_cons, IloNumVarArray& mp_vars,
-    BPNode& node);
+// 非根节点子问题函数 (new_node_sub.cpp)
+bool SolveNodeSP1Knapsack(ProblemParams& params, ProblemData& data, BPNode* node);
+bool SolveNodeSP1ArcFlow(ProblemParams& params, ProblemData& data, BPNode* node);
+bool SolveNodeSP1DP(ProblemParams& params, ProblemData& data, BPNode* node);
+bool SolveNodeSP2Knapsack(ProblemParams& params, ProblemData& data,
+    BPNode* node, int strip_type_id);
+bool SolveNodeSP2ArcFlow(ProblemParams& params, ProblemData& data,
+    BPNode* node, int strip_type_id);
+bool SolveNodeSP2DP(ProblemParams& params, ProblemData& data,
+    BPNode* node, int strip_type_id);
 
-// 节点处理
-int ProcessNode(ProblemParams& params, ProblemData& data, BPNode& node);
-int SelectBranchVar(ProblemParams& params, ProblemData& data, BPNode& node);
+// 列生成主流程函数 (column_generation.cpp)
+bool SolveRootSP1(ProblemParams& params, ProblemData& data, BPNode& node);
+bool SolveRootSP2(ProblemParams& params, ProblemData& data,
+    BPNode& node, int strip_type_id);
+bool SolveNodeSP1(ProblemParams& params, ProblemData& data, BPNode* node);
+bool SolveNodeSP2(ProblemParams& params, ProblemData& data,
+    BPNode* node, int strip_type_id);
 
-// 分支定界
-int RunBranchAndPrice(ProblemParams& params, ProblemData& data);
-int SelectBranchNode(ProblemParams& params, ProblemData& data, BPNode& parent_node);
-void CreateChildNode(ProblemParams& params, ProblemData& data, BPNode& new_node, BPNode& parent_node);
+// 分支定价函数 (branch_and_price.cpp)
+bool IsIntegerSolution(NodeSolution& solution);
+int SelectBranchVar(BPNode* node);
+void CreateLeftChild(BPNode* parent, int new_id, BPNode* child);
+void CreateRightChild(BPNode* parent, int new_id, BPNode* child);
+int RunBranchAndPrice(ProblemParams& params, ProblemData& data, BPNode* root);
+BPNode* SelectBranchNode(BPNode* head);
 
-// 非根节点列生成
-void SolveNodeCG(ProblemParams& params, ProblemData& data, BPNode& node, BPNode& parent_node);
-
-bool SolveNodeInitMP(
-    ProblemParams& params, ProblemData& data,
-    IloEnv& mp_env, IloModel& mp_model, IloObjective& mp_obj,
-    IloRangeArray& mp_cons, IloNumVarArray& mp_vars,
-    BPNode& node, BPNode& parent_node);
-
-// 输出
-void ExportMP(ProblemParams& params, ProblemData& data, BPNode& node);
-void ExportDualMP(ProblemParams& params, ProblemData& data, BPNode& node);
+// 输出函数 (output.cpp)
 void ExportResults(ProblemParams& params, ProblemData& data);
+void ExportSolution(BPNode* node, ProblemData& data);
 
-#endif  // CS_2D_BP_H_
+#endif  // CS_2D_BP_ARC_H_
